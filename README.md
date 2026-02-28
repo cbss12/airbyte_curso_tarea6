@@ -10,22 +10,25 @@ Transforma datos extraídos con **Airbyte** desde MotherDuck usando el modelo **
 
 ```
 airbyte_curso_dbt/
+├── packages.yml                          ← dbt-expectations package
 ├── models/
 │   ├── staging/
 │   │   ├── _sources.yml                  ← Definición de fuentes Airbyte
 │   │   ├── _staging_models.yml           ← Docs y tests de staging
-│   │   ├── stg_airbyte__plc_tags.sql     ← Staging: variables PLC
-│   │   └── stg_airbyte__repositories.sql ← Staging: repositorios GitHub
+│   │   ├── stg_airbyte__plc_tags.sql
+│   │   └── stg_airbyte__repositories.sql
 │   ├── intermediate/
 │   │   ├── _intermediate_models.yml
-│   │   ├── int_plc_tags_enriched.sql     ← Enriquece variables PLC con zonas
-│   │   └── int_repositories_classified.sql ← Clasifica repos por tipo
+│   │   ├── int_plc_tags_enriched.sql
+│   │   └── int_repositories_classified.sql
 │   └── marts/
 │       ├── _marts_models.yml
-│       ├── obt_plc_tags.sql              ← OBT final del sistema PLC
-│       └── obt_repositories.sql          ← OBT final de repositorios
+│       ├── obt_plc_tags.sql
+│       └── obt_repositories.sql
+├── tests/
+│   ├── assert_plc_tags_tienen_todas_las_zonas.sql   ← Singular test 1
+│   └── assert_repositories_fechas_validas.sql        ← Singular test 2
 ├── dbt_project.yml
-├── profiles.yml                          ← NO subir a git (credenciales)
 └── .gitignore
 ```
 
@@ -45,6 +48,32 @@ source: airbyte_raw.repositories
 
 ---
 
+## 🧪 Tests incluidos
+
+### Tests genéricos (5+)
+| Test | Modelo | Columna |
+|------|--------|---------|
+| `not_null` | stg_airbyte__plc_tags | tag_name, data_type, logical_address, address_prefix, is_hmi_visible |
+| `unique` | stg_airbyte__plc_tags | tag_name, logical_address |
+| `accepted_values` | stg_airbyte__plc_tags | address_prefix (%I, %Q, %M) |
+| `not_null` | stg_airbyte__repositories | repository_id, repository_name, organization_name |
+| `unique` | stg_airbyte__repositories | repository_id |
+
+### Tests dbt-expectations (3)
+| Test | Modelo | Columna | Qué verifica |
+|------|--------|---------|--------------|
+| `expect_column_values_to_match_regex` | stg_airbyte__plc_tags | logical_address | Formato `%I0.2` válido |
+| `expect_column_value_lengths_to_be_between` | stg_airbyte__repositories | repository_name | Longitud entre 1 y 100 caracteres |
+| `expect_column_values_to_match_regex` | stg_airbyte__repositories | clone_url | URL válida de GitHub |
+
+### Singular tests (2)
+| Archivo | Qué verifica |
+|---------|--------------|
+| `assert_plc_tags_tienen_todas_las_zonas.sql` | Existen variables en las 3 zonas (Entrada, Salida, Marca) |
+| `assert_repositories_fechas_validas.sql` | Ningún repo tiene fecha futura o anterior a 2008 |
+
+---
+
 ## ⚙️ Configuración
 
 ### 1. Requisitos
@@ -55,7 +84,7 @@ pip install dbt-core dbt-duckdb
 
 ### 2. Configurar credenciales de MotherDuck
 
-Crear archivo `profiles.yml` en la raíz del proyecto (o en `~/.dbt/profiles.yml`):
+Crear archivo `profiles.yml` en la raíz del proyecto:
 
 ```yaml
 airbyte_curso:
@@ -64,12 +93,14 @@ airbyte_curso:
     dev:
       type: duckdb
       path: 'md:airbyte_curso'
-      token: "{{ env_var('MOTHERDUCK_TOKEN') }}"
+      token: "TOKEN_DE_MOTHERDUCK"
       schema: main
+      threads: 4
 ```
 
+> ⚠️ **Nunca subas `profiles.yml` a Git.** Está en `.gitignore`.
 
-### 3. Instalar dependencias dbt
+### 3. Instalar paquetes dbt
 
 ```bash
 dbt deps
@@ -79,82 +110,32 @@ dbt deps
 
 ## 🚀 Uso
 
-### Ejecutar todos los modelos
-
 ```bash
+# Verificar conexión
+dbt debug
+
+# Instalar paquetes (dbt-expectations)
+dbt deps
+
+# Correr todos los modelos
 dbt run
-```
 
-### Ejecutar solo un modelo específico
-
-```bash
-dbt run --select stg_airbyte__plc_tags
-dbt run --select obt_plc_tags
-```
-
-### Ejecutar por capa
-
-```bash
-dbt run --select staging.*
-dbt run --select intermediate.*
-dbt run --select marts.*
-```
-
-### Ejecutar un modelo y todos sus descendientes
-
-```bash
-dbt run --select stg_airbyte__plc_tags+
-```
-
-### Correr tests
-
-```bash
+# Correr todos los tests
 dbt test
-```
 
-### Generar y ver documentación (DAG)
+# Correr modelos + tests juntos (recomendado para entrega)
+dbt build
 
-```bash
+# Generar documentación y DAG
 dbt docs generate
 dbt docs serve
 ```
 
 ---
 
-## 📊 Modelos
-
-### Staging
-| Modelo | Fuente | Registros | Descripción |
-|--------|--------|-----------|-------------|
-| `stg_airbyte__plc_tags` | `main.plc_tags` | 16 | Variables PLC limpias con booleanos y prefijo de zona |
-| `stg_airbyte__repositories` | `main.repositories` | 93 | Repositorios GitHub con nombre y org extraídos |
-
-### Intermediate
-| Modelo | Upstream | Descripción |
-|--------|----------|-------------|
-| `int_plc_tags_enriched` | stg_airbyte__plc_tags | Añade zona, byte/bit de dirección y flags de control |
-| `int_repositories_classified` | stg_airbyte__repositories | Clasifica repos por tipo y estado de actividad |
-
-### Marts (OBT)
-| Modelo | Materialización | Descripción |
-|--------|-----------------|-------------|
-| `obt_plc_tags` | table | OBT final del sistema PLC para dashboards |
-| `obt_repositories` | table | OBT final del portafolio de repos GitHub |
-
----
-
-## 🧪 Tests incluidos
-
-- `not_null` en todas las columnas críticas
-- `unique` en claves naturales
-- `accepted_values` en zonas PLC, tipos de repo y estados de actividad
-
----
-
 ## 📚 Referencias
 
 - [dbt Documentation](https://docs.getdbt.com)
+- [dbt-expectations](https://github.com/calogica/dbt-expectations)
 - [dbt-duckdb adapter](https://github.com/duckdb/dbt-duckdb)
 - [MotherDuck docs](https://motherduck.com/docs)
-- The Data Warehouse Toolkit — Ralph Kimball (Clase 4)
-- [The Rise of the One Big Table — dbt Labs](https://getdbt.com/blog/one-big-table)
