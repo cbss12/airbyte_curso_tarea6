@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: int_plc_tags_enriched
+    description: >
+      Enriquece los tags del PLC con etiquetas de zona (Entrada/Salida/Marca),
+      clasificación de acceso HMI y descomposición de la dirección lógica
+      en byte y bit individuales.
+    columns:
+      - name: tag_name
+        description: Nombre único de la variable
+        tests:
+          - not_null
+          - unique
+      - name: zone_label
+        description: Etiqueta de zona (Entrada, Salida, Marca)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Entrada', 'Salida', 'Marca', 'Desconocida']
+      - name: hmi_access_label
+        description: Clasificación de acceso HMI
+        tests:
+          - not_null
+      - name: address_byte
+        description: Número de byte de la dirección lógica
+      - name: address_bit
+        description: Número de bit de la dirección lógica
+
+  - name: int_repositories_classified
+    description: >
+      Clasifica los repositorios de GitHub por estado (activo/archivado),
+      tipo inferido desde el nombre y nivel de actividad reciente
+      basado en días desde la última actualización.
+    columns:
+      - name: repository_id
+        description: ID único del repositorio
+        tests:
+          - not_null
+          - unique
+      - name: repo_status
+        description: Estado operativo (Activo / Archivado)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Activo', 'Archivado']
+      - name: repo_type
+        description: Tipo inferido desde el nombre del repositorio
+        tests:
+          - not_null
+      - name: activity_label
+        description: Nivel de actividad basado en días sin actualización
+        tests:
+          - not_null

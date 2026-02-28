@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: obt_plc_tags
+    description: >
+      One Big Table para monitoreo del sistema PLC. Consolida nombres de tags,
+      direcciones lógicas, zonas, configuración HMI y metadata en una única tabla
+      optimizada para dashboards operativos.
+    columns:
+      - name: tag_name
+        description: Nombre único de la variable PLC
+        tests:
+          - not_null
+          - unique
+      - name: logical_address
+        description: Dirección lógica completa en el PLC
+        tests:
+          - not_null
+      - name: zone_label
+        description: Zona del PLC — Entrada, Salida o Marca
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Entrada', 'Salida', 'Marca', 'Desconocida']
+      - name: data_type
+        description: Tipo de dato de la variable
+        tests:
+          - not_null
+      - name: is_hmi_visible
+        description: Variable visible en pantalla HMI
+        tests:
+          - not_null
+
+  - name: obt_repositories
+    description: >
+      One Big Table para análisis de repositorios GitHub de AirbyteHQ.
+      Incluye clasificación por tipo, estado y nivel de actividad reciente.
+    columns:
+      - name: repository_id
+        description: ID único del repositorio
+        tests:
+          - not_null
+          - unique
+      - name: repository_name
+        description: Nombre del repositorio
+        tests:
+          - not_null
+      - name: repo_status
+        description: Activo o Archivado
+        tests:
+          - not_null
+      - name: repo_type
+        description: Tipo inferido desde el nombre
+        tests:
+          - not_null
+      - name: activity_label
+        description: Nivel de actividad reciente
+        tests:
+          - not_null
