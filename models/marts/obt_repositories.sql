@@ -1,39 +1,36 @@
 -- obt_repositories.sql
--- Mart (OBT): tabla final para análisis y dashboard de repositorios GitHub.
--- Incluye todas las clasificaciones del modelo intermediate.
+-- One Big Table para análisis del portafolio de repositorios GitHub.
+-- Consolida toda la información de clasificación y actividad en una
+-- sola tabla lista para dashboards.
 
-with classified as (
+with repos_classified as (
 
     select * from {{ ref('int_repositories_classified') }}
 
-),
-
-final as (
-
-    select
-        -- Identificación
-        repository_id,
-        repository_name,
-
-        -- Estado y clasificación
-        repo_status,
-        repo_type,
-        is_archived,
-
-        -- Actividad
-        activity_label,
-        days_since_update,
-        last_updated_at,
-
-        -- URLs de referencia
-        clone_url,
-
-        -- Auditoría
-        extracted_at
-
-    from classified
-    order by repo_status, activity_label, repository_name
-
 )
 
-select * from final
+select
+    -- === IDENTIFICACIÓN ===
+    repository_id,
+    repository_name,
+    organization_name,
+    clone_url,
+
+    -- === CLASIFICACIÓN ===
+    repo_type,
+
+    -- === ESTADO ===
+    is_archived,
+    is_active_repo,
+    activity_status,
+
+    -- === ACTIVIDAD ===
+    updated_at,
+    days_since_update,
+
+    -- === METADATA ===
+    extracted_at,
+    current_timestamp                               as transformed_at
+
+from repos_classified
+order by is_active_repo desc, updated_at desc

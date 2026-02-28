@@ -1,6 +1,6 @@
 -- stg_airbyte__plc_tags.sql
--- Staging model: limpia y tipifica los datos crudos de plc_tags.
--- Renombra columnas a nombres de negocio y elimina campos internos de Airbyte.
+-- Limpieza y estandarización de las variables PLC
+-- Source: airbyte_curso.main.plc_tags (16 registros)
 
 with source as (
 
@@ -11,29 +11,27 @@ with source as (
 renamed as (
 
     select
-        -- Identificador natural (usamos el nombre como clave ya que es único en el PLC)
+        -- Identificador natural de la variable
         name                                        as tag_name,
 
-        -- Atributos descriptivos
-        path                                        as path_description,
-        comment                                     as tag_comment,
+        -- Atributos de la variable
         data_type,
-
-        -- Configuración HMI (castear de TEXT a BOOLEAN)
-        (hmi_visible    = 'True')::boolean          as is_hmi_visible,
-        (hmi_accessible = 'True')::boolean          as is_hmi_accessible,
-
-        -- Dirección lógica en el PLC
         logical_address,
+        path                                        as path_description,
 
-        -- Extraer prefijo de zona desde la dirección lógica:
-        --   %I → Entrada digital
-        --   %Q → Salida digital
-        --   %M → Marca/memoria interna
-        regexp_extract(logical_address, '%([A-Z])', 1) as address_prefix,
+        -- Extraer el prefijo de la dirección lógica para clasificar la zona
+        -- %I = Entrada, %Q = Salida, %M = Marca interna
+        left(logical_address, 2)                    as address_prefix,
 
-        -- Metadatos de carga
-        _airbyte_raw_id                             as airbyte_raw_id,
+        -- Castear TEXT a BOOLEAN
+        (hmi_visible = 'True')                      as is_hmi_visible,
+        (hmi_accessible = 'True')                   as is_hmi_accessible,
+
+        -- Normalizar campo comment: NULL → string vacío
+        coalesce(comment, '')                       as tag_comment,
+
+        -- Metadatos de Airbyte
+        _airbyte_raw_id,
         _airbyte_extracted_at                       as extracted_at
 
     from source

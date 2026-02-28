@@ -1,8 +1,8 @@
 -- int_repositories_classified.sql
--- Intermediate model: clasifica los repositorios según su estado,
--- tipo inferido desde el nombre, y antigüedad desde la última actualización.
+-- Clasifica repositorios de GitHub por tipo de proyecto según convenciones
+-- de nomenclatura del ecosistema Airbyte. Prepara datos para el mart.
 
-with repos as (
+with repositories as (
 
     select * from {{ ref('stg_airbyte__repositories') }}
 
@@ -13,48 +13,44 @@ classified as (
     select
         repository_id,
         repository_name,
+        organization_name,
         is_archived,
         clone_url,
-        last_updated_at,
+        updated_at,
         extracted_at,
 
-        -- Clasificación por estado operativo
+        -- Clasificar el tipo de repositorio según el prefijo del nombre
         case
-            when is_archived then 'Archivado'
-            else 'Activo'
-        end                                             as repo_status,
-
-        -- Inferir tipo de repositorio desde el nombre
-        case
-            when repository_name ilike '%connector%'    then 'Connector'
-            when repository_name ilike '%tap-%'         then 'Singer Tap'
-            when repository_name ilike '%target-%'      then 'Singer Target'
-            when repository_name ilike '%sdk%'          then 'SDK'
-            when repository_name ilike '%demo%'         then 'Demo / Ejemplo'
-            when repository_name ilike '%docs%'         then 'Documentación'
-            when repository_name ilike '%workshop%'     then 'Workshop'
-            else 'General'
+            when repository_name like 'connector-%'   then 'Connector'
+            when repository_name like 'tap-%'         then 'Singer Tap'
+            when repository_name like 'target-%'      then 'Singer Target'
+            when repository_name like 'airbyte-%'     then 'Airbyte Core'
+            when repository_name like '%-demo%'       then 'Demo / Example'
+            when repository_name like '%-workshop%'   then 'Workshop'
+            when repository_name like 'dbt-%'         then 'dbt Integration'
+            else 'Other'
         end                                             as repo_type,
 
-        -- Días desde la última actualización (relativo a la extracción)
+        -- Estado de actividad basado en updated_at
+        case
+            when updated_at >= current_date - interval '90 days'  then 'Activo'
+            when updated_at >= current_date - interval '365 days' then 'Mantenimiento'
+            else 'Inactivo'
+        end                                             as activity_status,
+
+        -- Días desde la última actualización
         datediff(
             'day',
-            last_updated_at,
-            extracted_at
+            updated_at,
+            current_timestamp
         )                                               as days_since_update,
 
-        -- Clasificación de actividad reciente
-        case
-            when datediff('day', last_updated_at, extracted_at) <= 30
-                then 'Muy activo'
-            when datediff('day', last_updated_at, extracted_at) <= 180
-                then 'Activo'
-            when datediff('day', last_updated_at, extracted_at) <= 365
-                then 'Poco activo'
-            else 'Inactivo'
-        end                                             as activity_label
+        -- Estado combinado: activo y no archivado
+        (not is_archived
+            and updated_at >= current_date - interval '365 days')
+                                                        as is_active_repo
 
-    from repos
+    from repositories
 
 )
 

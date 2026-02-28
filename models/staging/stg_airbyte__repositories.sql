@@ -1,6 +1,6 @@
 -- stg_airbyte__repositories.sql
--- Staging model: limpia y tipifica los datos crudos de repositories.
--- Extrae el nombre del repo desde la clone_url y normaliza tipos.
+-- Limpieza y estandarización de repositorios de GitHub
+-- Source: airbyte_curso.main.repositories (93 registros)
 
 with source as (
 
@@ -11,33 +11,36 @@ with source as (
 renamed as (
 
     select
-        -- Identificador
-        id                                              as repository_id,
+        -- Identificador del repositorio
+        id                                          as repository_id,
 
-        -- Extraer nombre del repo desde clone_url
-        -- Ej: https://github.com/airbytehq/tap-appstore.git → tap-appstore
+        -- Extraer el nombre del repo desde la clone_url
+        -- Ejemplo: https://github.com/airbytehq/tap-appstore.git → tap-appstore
         regexp_extract(
             clone_url,
             'github\.com/[^/]+/([^/]+?)(?:\.git)?$',
             1
-        )                                               as repository_name,
+        )                                           as repository_name,
+
+        -- Extraer el owner/organización desde la clone_url
+        regexp_extract(
+            clone_url,
+            'github\.com/([^/]+)/',
+            1
+        )                                           as organization_name,
 
         -- Estado del repositorio
-        (archived = 'true')::boolean                   as is_archived,
+        (archived = 'true' or archived = true)      as is_archived,
 
         -- URLs útiles
         clone_url,
-        archive_url,
-        commits_url,
-        comments_url,
-        collaborators_url,
 
-        -- Fechas
-        updated_at::timestamp                           as last_updated_at,
+        -- Timestamps
+        cast(updated_at as timestamp)               as updated_at,
 
-        -- Metadatos de carga
-        _airbyte_raw_id                                 as airbyte_raw_id,
-        _airbyte_extracted_at                           as extracted_at
+        -- Metadatos de Airbyte
+        _airbyte_raw_id,
+        _airbyte_extracted_at                       as extracted_at
 
     from source
 
